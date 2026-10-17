@@ -7,11 +7,10 @@ Single-file Windows voice assistant (`assistant.py`). No tests, linter, typechec
 ```bat
 python -m venv .venv
 .venv\Scripts\activate.bat
-python -m pip install vosk sounddevice pyttsx3 rapidfuzz pillow
+python -m pip install -r requirements.txt
 python assistant.py
 ```
 
-- `requirements.txt` is referenced by README but **does not exist** in the repo.
 - Requires a working microphone and a desktop session (tkinter overlay), so it cannot be verified headless. Smoke-check the GUI instead: `python -c "import assistant; o=assistant.Orb(); o._draw(); o.quit()"` (import runs `pyttsx3.init()` at module level).
 - Runs a floating `Orb` overlay (`tk.Tk`, borderless, always-on-top, chroma-key transparent). Stops via the voice phrase "stop listening" or right-click → Quit — `Ctrl+C` no longer applies because tkinter owns the mainloop.
 - Python 3.10+; if a dep fails to install (notably on 3.14), use 3.12/3.13.
@@ -24,8 +23,9 @@ python assistant.py
 - Two Vosk recognizers share one model: an open-vocabulary `recognizer` and a grammar-constrained `constrained_recognizer` built by `build_grammar()` (assistant.py:322). `handle_command` tries the free transcript first, then re-runs the buffered PCM through `recognize_constrained()` before falling back to Google search. Search always uses the free transcript.
 - `find_model_dir()` (assistant.py:346) prefers a larger model folder under `model/` if one is present; otherwise the committed `model/vosk-model-small-en-us-0.15/`. `MODEL_DIR` (assistant.py:33) is the fallback and is hardcoded to that exact folder name.
 - `scroll_window()` (assistant.py:259) sends synthetic mouse-wheel events via `ctypes` (no extra dependency) at the cursor, so scrolling targets whatever window is under the pointer. Negative wheel delta scrolls down.
+- `requirements.txt` — the five third-party deps (`vosk`, `sounddevice`, `pyttsx3`, `rapidfuzz`, `pillow`), unpinned so any supported Python can resolve wheels. Both README install steps and the Run block above install from it.
 - `start_assistant.bat` — startup launcher. Uses `cd /d "%~dp0"` and `start "" pythonw assistant.py` (no console window; `pythonw` is why the module redirects `None` stdout/stderr to `os.devnull`).
-- README's project structure section is partly aspirational (`.venv`, `requirements.txt` are not tracked). Trust the code over the README.
+- Committed tree: `assistant.py`, `requirements.txt`, `start_assistant.bat`, `README.md`, `AGENTS.md`, `model/`. `.venv/` is created during setup and not tracked. Trust the code over the README.
 
 ## Conventions (easy to get wrong)
 

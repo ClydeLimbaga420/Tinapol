@@ -38,6 +38,7 @@ The project uses offline speech recognition and local text-to-speech. No cloud A
 ```text
 asst/
 ├── assistant.py
+├── requirements.txt
 ├── start_assistant.bat
 ├── README.md
 ├── AGENTS.md
@@ -96,7 +97,7 @@ Activate it:
 
 ### 4. Install Dependencies
 
-Create a file named `requirements.txt` with the following contents:
+The third-party dependencies are listed in `requirements.txt`:
 
 ```text
 vosk
