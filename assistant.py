@@ -80,6 +80,7 @@ WEBSITES = {
     "stackoverflow": "https://stackoverflow.com",
     "portfolio": "https://clydelimbaga.netlify.app",
     "canva": "https://www.canva.com",
+    "claude": "https://claude.ai",
 }
 
 APPS = [
@@ -98,6 +99,8 @@ APPS = [
     "brave",
     "brave browser",
     "spotify",
+    "vs code",
+    "vscode",
 ]
 
 # Common misrecognitions and shorthand mapped to a canonical target.
@@ -123,6 +126,9 @@ ALIASES = {
     "taskmgr": "task manager",
     "get help": "github",
     "can ba": "canva",
+    "friend": "claude",
+    "workplace": "vs code",
+    "v s code": "vs code",
 }
 
 EXIT_PHRASES = [
@@ -214,6 +220,23 @@ def open_app(app_name):
         # Fall back to the spotify: URI protocol (also handles the Store app).
         webbrowser.open("spotify:")
         speak("Opening Spotify")
+        return
+
+    if app_name in ("vs code", "vscode"):
+        candidates = [
+            Path.home() / r"AppData\Local\Programs\Microsoft VS Code\Code.exe",
+            Path(r"C:\Program Files\Microsoft VS Code\Code.exe"),
+            Path(r"C:\Program Files (x86)\Microsoft VS Code\Code.exe"),
+        ]
+
+        for candidate in candidates:
+            if candidate.exists():
+                subprocess.Popen([str(candidate)])
+                speak("Opening Visual Studio Code")
+                return
+
+        speak("Visual Studio Code was not found. Opening the web editor.")
+        webbrowser.open("https://vscode.dev")
         return
 
     speak(f"I don't know how to open {app_name} yet")

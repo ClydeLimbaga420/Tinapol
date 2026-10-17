@@ -249,6 +249,7 @@ This does not delete your project or its dependencies.
 | Open Chrome | Launch Chrome if found |
 | Open Brave | Launch Brave if found |
 | Open Spotify | Launch Spotify |
+| Open VS Code | Launch Visual Studio Code if found |
 | Open Browser | Open the default browser |
 
 ### Websites
@@ -264,6 +265,7 @@ This does not delete your project or its dependencies.
 | Open Reddit | Open Reddit |
 | Open Stack Overflow | Open Stack Overflow |
 | Open Canva | Open Canva |
+| Open Claude | Open Claude |
 | Open Portfolio | Open the author's portfolio |
 
 ### Google Search
@@ -332,13 +334,15 @@ Apps installed to user-specific locations (Chrome, Brave, Spotify) are handled s
 
 ## Fixing Misrecognitions with Aliases
 
-When the assistant consistently hears a word wrong, add it to the module-level `ALIASES` dictionary — it maps the misheard word to a command that already exists. For example, to make "can ba" open Canva:
+When the assistant consistently hears a word wrong, add it to the module-level `ALIASES` dictionary — it maps the misheard word to a command that already exists. Aliases can also be friendly nicknames, for example mapping "friend" to Claude and "workplace" to VS Code:
 
 ```python
 ALIASES = {
     "kalk": "calculator",
     "note pad": "notepad",
     "can ba": "canva",
+    "friend": "claude",
+    "workplace": "vs code",
 }
 ```
 
