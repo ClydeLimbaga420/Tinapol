@@ -10,12 +10,15 @@ The project uses offline speech recognition and local text-to-speech. No cloud A
 - Offline speech recognition using Vosk
 - Local text-to-speech using pyttsx3
 - Microphone input using sounddevice
+- Floating on-screen orb overlay with live listening/speaking feedback
+- Grammar-constrained command recognition for high accuracy
 - Fuzzy command matching using RapidFuzz
+- Misrecognition aliases for words the assistant commonly hears wrong
 - Launch supported Windows applications
 - Open websites using voice commands
 - Search Google using spoken queries
 - Automatic startup when you log in to Windows
-- Simple Windows batch launcher
+- Simple Windows batch launcher (runs without a console window)
 - No cloud-based speech recognition required
 
 ## Requirements
@@ -31,22 +34,21 @@ The project uses offline speech recognition and local text-to-speech. No cloud A
 ## Project Structure
 
 ```text
-ClydeVoiceAssistant/
+asst/
 ├── assistant.py
 ├── start_assistant.bat
-├── requirements.txt
 ├── README.md
-├── .gitignore
-├── .venv/
-└── model/
-    └── vosk-model-small-en-us-0.15/
-        ├── am/
-        ├── conf/
-        ├── graph/
-        └── ...
+├── AGENTS.md
+├── model/
+│   └── vosk-model-small-en-us-0.15/
+│       ├── am/
+│       ├── conf/
+│       ├── graph/
+│       └── ...
+└── .venv/          (created during setup)
 ```
 
-The `.venv` folder is created during setup. The Vosk model must be downloaded separately.
+The `.venv` folder is created during setup. A Vosk model must be present under `model/` (the small English model is already included).
 
 ## Installation
 
@@ -70,8 +72,8 @@ Open Command Prompt in your project directory.
 If creating a new project:
 
 ```bat
-mkdir ClydeVoiceAssistant
-cd ClydeVoiceAssistant
+mkdir asst
+cd asst
 ```
 
 If the project already exists, navigate to its directory instead.
@@ -108,25 +110,22 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
+> `tkinter` (used for the orb overlay) ships with Python, so no extra install is needed.
+
 ### 5. Download the Vosk Speech Model
 
-Download the small English speech recognition model:
-
-https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
-
-Official model directory:
-
-https://alphacephei.com/vosk/models
-
-Extract the ZIP archive into the project's `model` directory.
-
-The resulting directory should be:
+A small English model is already included in this repository under:
 
 ```text
 model/vosk-model-small-en-us-0.15/
 ```
 
-Ensure that the extracted folder contains the model files, not just the ZIP archive.
+If you need to re-download or want a more accurate model, see **Improving Recognition Accuracy** below. Official downloads:
+
+- Small English: https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip
+- All models: https://alphacephei.com/vosk/models
+
+Extract the ZIP so the folder sits directly under `model/`, and make sure it contains the model files, not just the archive.
 
 ### 6. Configure Your Microphone
 
@@ -150,45 +149,45 @@ Run the assistant:
 python assistant.py
 ```
 
-Wait for the model to load, then speak into your microphone.
+Wait for the model to load. A floating **orb** appears near the bottom-right of your screen:
 
-To stop the assistant, say:
+- **Cyan, slowly pulsing** — listening.
+- **Green, quickly pulsing** — speaking.
+
+Drag the orb to move it. To stop the assistant, say:
 
 ```text
 Stop listening
 ```
 
-You can also press `Ctrl+C` in the terminal.
+You can also **right-click the orb → Quit**. Because the overlay runs its own GUI event loop, `Ctrl+C` in the terminal won't stop it.
 
 ## Automatic Startup on Windows
 
 You can configure Clyde Voice Assistant to start automatically when you sign in to Windows.
 
-### 1. Create the Startup Launcher
+### 1. Check the Startup Launcher
 
-Create a file named `start_assistant.bat` in the main project folder, beside `assistant.py`.
-
-Paste the following code:
+The project already includes `start_assistant.bat` beside `assistant.py`, containing:
 
 ```bat
 @echo off
 cd /d "%~dp0"
 call .venv\Scripts\activate.bat
-python assistant.py
-pause
+start "" pythonw assistant.py
 ```
 
-The `%~dp0` variable automatically locates the project folder containing the batch file.
-
-The launcher activates the virtual environment and starts the assistant. The `pause` command keeps the terminal open if the program exits, allowing you to inspect errors.
+- `%~dp0` automatically locates the project folder containing the batch file.
+- `pythonw` runs the assistant **without a console window** — only the orb is shown.
+- If you prefer to see the console (useful for debugging), change `pythonw` to `python` and remove `start ""`.
 
 ### 2. Test the Launcher
 
 Double-click `start_assistant.bat`.
 
-Confirm that the assistant starts correctly and recognizes voice commands.
+Confirm that the orb appears and recognizes voice commands.
 
-If it does not work, fix the problem before configuring automatic startup.
+If it does not work, fix the problem before configuring automatic startup. For debugging, run `python assistant.py` directly so you can read the console output.
 
 ### 3. Open the Windows Startup Folder
 
@@ -210,7 +209,7 @@ Windows opens your personal Startup folder.
 
 ### 4. Add the Launcher Shortcut
 
-1. Open the `ClydeVoiceAssistant` project folder.
+1. Open the project folder.
 2. Right-click `start_assistant.bat`.
 3. Select **Create shortcut**.
 4. Copy the shortcut into the Windows Startup folder.
@@ -248,6 +247,8 @@ This does not delete your project or its dependencies.
 | Open Command Prompt | Launch Command Prompt |
 | Open Task Manager | Launch Task Manager |
 | Open Chrome | Launch Chrome if found |
+| Open Brave | Launch Brave if found |
+| Open Spotify | Launch Spotify |
 | Open Browser | Open the default browser |
 
 ### Websites
@@ -262,6 +263,8 @@ This does not delete your project or its dependencies.
 | Open ChatGPT | Open ChatGPT |
 | Open Reddit | Open Reddit |
 | Open Stack Overflow | Open Stack Overflow |
+| Open Canva | Open Canva |
+| Open Portfolio | Open the author's portfolio |
 
 ### Google Search
 
@@ -285,25 +288,23 @@ Goodbye
 
 ## Adding Websites
 
-Open `assistant.py` and locate the `websites` dictionary inside `handle_command()`.
-
-Add a website:
+Open `assistant.py` and locate the module-level `WEBSITES` dictionary. Add an entry:
 
 ```python
-websites = {
+WEBSITES = {
     "youtube": "https://www.youtube.com",
     "google": "https://www.google.com",
     "my website": "https://example.com",
 }
 ```
 
-Replace the example URL with your actual website address.
+Replace the example URL with your actual website address. The command vocabulary is read automatically, so the voice command and the recognition grammar update themselves on the next launch.
 
 ## Adding Applications
 
-Locate the `apps` dictionary inside `open_app()`.
+Adding an app takes **two edits**:
 
-Add an application:
+1. The `apps` dictionary inside `open_app()` (maps the name to the executable):
 
 ```python
 apps = {
@@ -314,19 +315,61 @@ apps = {
 }
 ```
 
-Replace the example path with the actual executable path.
+2. The module-level `APPS` list (lets fuzzy matching and the grammar recognize the command):
+
+```python
+APPS = [
+    "notepad",
+    "calculator",
+    # ...
+    "my app",
+]
+```
+
+If you skip step 2, the command will never reach `open_app()`.
+
+Apps installed to user-specific locations (Chrome, Brave, Spotify) are handled specially in `open_app()` with a list of candidate paths plus a fallback, rather than being added to the `apps` dictionary.
+
+## Fixing Misrecognitions with Aliases
+
+When the assistant consistently hears a word wrong, add it to the module-level `ALIASES` dictionary — it maps the misheard word to a command that already exists. For example, to make "can ba" open Canva:
+
+```python
+ALIASES = {
+    "kalk": "calculator",
+    "note pad": "notepad",
+    "can ba": "canva",
+}
+```
+
+Alias values must be a canonical key that already exists in `WEBSITES` or `APPS`. This is usually the fastest way to fix accuracy for your own voice and microphone.
 
 > Security: Only add trusted applications. Never execute arbitrary microphone-recognized text as a system command.
+
+## Improving Recognition Accuracy
+
+The assistant uses two passes: an open-vocabulary pass, then a grammar-constrained pass that only considers the known commands. If it still mishears you:
+
+1. **Add aliases.** Run `python assistant.py`, watch the `You said:` and `(constrained: ...)` lines, then add each mishearing to `ALIASES`.
+2. **Install a larger Vosk model.** Accuracy increases significantly with model size. Unzip any model into the `model/` folder; the assistant automatically picks the largest one it recognizes. Suggested order:
+   - `vosk-model-small-en-us-0.22` (~40 MB) — quick upgrade
+   - `vosk-model-en-us-0.22` (~1.8 GB) — most accurate
+3. **Select the correct microphone.** If the wrong device is used, the console prints the available input indices on startup failure. Set `MIC_DEVICE` near the top of `assistant.py` to your microphone's index:
+
+```python
+MIC_DEVICE = 1  # or None to use the system default
+```
 
 ## How It Works
 
 | Component | Purpose |
 |---|---|
 | Python | Main programming language |
-| Vosk | Offline speech recognition |
+| Vosk | Offline speech recognition (free + grammar-constrained recognizers) |
 | sounddevice | Captures microphone audio |
 | pyttsx3 | Generates spoken responses locally |
 | RapidFuzz | Matches commands despite minor transcription errors |
+| tkinter | Draws the floating orb overlay and runs the event loop |
 | webbrowser | Opens websites and search results |
 | subprocess | Launches approved desktop applications |
 | Windows Startup | Launches the assistant after user sign-in |
@@ -358,40 +401,39 @@ Make sure you use the same Python interpreter for installation and execution.
 
 ### Speech Model Not Found
 
-Verify this directory exists:
+Verify at least one model folder exists under `model/`, for example:
 
 ```text
 model/vosk-model-small-en-us-0.15/
 ```
 
-Ensure the model has been extracted correctly.
+Ensure the model has been extracted correctly (the folder should contain `am/`, `conf/`, `graph/`, not just a ZIP).
 
 ### Microphone Not Working
 
-List available audio devices:
+List available audio devices and their indices:
 
 ```bat
 python -c "import sounddevice as sd; print(sd.query_devices())"
 ```
 
-Check Windows microphone permissions and ensure the selected input device supports the configured sample rate.
+Then set `MIC_DEVICE` near the top of `assistant.py` to the index of your microphone (use `None` for the system default). Also check Windows microphone permissions and ensure the device supports 16 kHz input.
 
 ### Commands Are Misrecognized
 
 Try the following:
 
+- Add the exact misheard words to the `ALIASES` dictionary (see **Improving Recognition Accuracy**).
+- Install a larger Vosk model for better general accuracy.
+- Set `MIC_DEVICE` to the correct input device.
 - Speak clearly and pause briefly before and after each command.
-- Reduce background noise.
-- Move closer to the microphone.
-- Check the selected input device.
-- Use the RapidFuzz-enabled version of the script.
-- Adjust the matching threshold carefully to avoid incorrect matches.
+- Reduce background noise and move closer to the microphone.
 
-Fuzzy matching can help with minor transcription errors but cannot guarantee accurate recognition.
+The grammar-constrained pass and fuzzy matching handle minor transcription errors, but cannot guarantee perfect recognition.
 
-### Chrome Does Not Open
+### Chrome or Brave Does Not Open
 
-Check whether Chrome is installed in one of the paths configured in `assistant.py`.
+Check whether the browser is installed in one of the paths configured in `assistant.py`.
 
 Alternatively, use:
 
@@ -407,13 +449,14 @@ Verify that Windows audio output is working and that an installed speech voice i
 
 ### Assistant Does Not Start Automatically
 
-Check the following:
+The launcher runs without a console window (`pythonw`), so if something fails you won't see an error. Check the following:
 
-1. Run `start_assistant.bat` manually.
-2. Confirm that `.venv\Scripts\activate.bat` exists.
-3. Confirm that `assistant.py` and the Vosk model are in the expected locations.
-4. Confirm that the shortcut is inside the folder opened by `shell:startup`.
-5. Check whether Windows security software is blocking the script.
+1. Run `start_assistant.bat` manually and confirm the orb appears.
+2. If you see nothing, run `python assistant.py` from a terminal to read the error output.
+3. Confirm that `.venv\Scripts\activate.bat` exists.
+4. Confirm that `assistant.py` and the Vosk model are in the expected locations.
+5. Confirm that the shortcut is inside the folder opened by `shell:startup`.
+6. Check whether Windows security software is blocking the script.
 
 ## Security and Privacy
 
@@ -427,11 +470,11 @@ Check the following:
 ## Development Roadmap
 
 - [ ] Add wake-word activation, such as "Hey Clyde".
-- [ ] Improve speech recognition accuracy.
+- [x] Improve speech recognition accuracy (grammar-constrained pass + aliases).
 - [ ] Add custom application paths.
 - [ ] Store commands in a configuration file.
 - [ ] Improve Cebuano-English mixed-language support.
-- [ ] Add a graphical user interface.
+- [x] Add a graphical user interface (floating orb overlay).
 - [ ] Improve startup and error handling.
 - [ ] Explore local language models for more flexible commands.
 
@@ -449,11 +492,13 @@ Python | Windows Automation | Offline Speech Recognition
 
 ## Quick Start
 
-After completing the initial installation and model setup:
+After completing the initial installation and model setup (the model is already included):
 
 ```bat
 .venv\Scripts\activate.bat
 python assistant.py
 ```
 
-To launch it automatically at sign-in, create `start_assistant.bat`, test it, and add a shortcut to the folder opened by `shell:startup`.
+A floating orb appears; say "open Notepad", "open YouTube", or "stop listening".
+
+To launch it automatically at sign-in, add a shortcut to `start_assistant.bat` inside the folder opened by `shell:startup` — it runs with no console window.

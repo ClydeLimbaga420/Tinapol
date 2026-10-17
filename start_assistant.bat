@@ -1,6 +1,4 @@
-
 @echo off
-cd /d "C:\Path\To\asst"
+cd /d "%~dp0"
 call .venv\Scripts\activate.bat
-python assistant.py
-    
+start "" pythonw assistant.py
