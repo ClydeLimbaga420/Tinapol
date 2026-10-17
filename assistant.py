@@ -84,6 +84,7 @@ WEBSITES = {
     "canva": "https://www.canva.com",
     "claude": "https://claude.ai",
     "reels": "https://www.facebook.com/reel/",
+    "enma": "https://www.enma.lol/home",
 }
 
 APPS = [
@@ -134,6 +135,7 @@ ALIASES = {
     "v s code": "vs code",
     "facebook reels": "reels",
     "reel": "reels",
+    
 }
 
 EXIT_PHRASES = [
