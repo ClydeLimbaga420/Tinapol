@@ -135,6 +135,7 @@ ALIASES = {
     "v s code": "vs code",
     "facebook reels": "reels",
     "reel": "reels",
+    "watch": "enma",
     
 }
 
