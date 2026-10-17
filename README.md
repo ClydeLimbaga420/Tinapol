@@ -101,6 +101,7 @@ vosk
 sounddevice
 pyttsx3
 rapidfuzz
+pillow
 ```
 
 Install the libraries:
@@ -266,7 +267,19 @@ This does not delete your project or its dependencies.
 | Open Stack Overflow | Open Stack Overflow |
 | Open Canva | Open Canva |
 | Open Claude | Open Claude |
+| Open Reels | Open Facebook Reels |
 | Open Portfolio | Open the author's portfolio |
+
+### Scrolling
+
+These commands scroll whatever window is **under the mouse cursor**, so keep the pointer over the page (e.g. the Facebook feed or Reels) when you speak:
+
+| Voice Command | Action |
+|---|---|
+| Scroll / Scroll down | Scroll down |
+| Scroll up | Scroll up |
+| Page down | Scroll down one page |
+| Page up | Scroll up one page |
 
 ### Google Search
 
@@ -373,9 +386,11 @@ MIC_DEVICE = 1  # or None to use the system default
 | sounddevice | Captures microphone audio |
 | pyttsx3 | Generates spoken responses locally |
 | RapidFuzz | Matches commands despite minor transcription errors |
+| Pillow | Renders the glossy, anti-aliased orb sprite |
 | tkinter | Draws the floating orb overlay and runs the event loop |
 | webbrowser | Opens websites and search results |
 | subprocess | Launches approved desktop applications |
+| ctypes | Sends synthetic mouse-wheel events for scrolling |
 | Windows Startup | Launches the assistant after user sign-in |
 
 ## Offline Support

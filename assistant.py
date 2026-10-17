@@ -1,4 +1,5 @@
 
+import ctypes
 import json
 import math
 import os
@@ -15,6 +16,7 @@ from rapidfuzz import process, fuzz
 import sounddevice as sd
 import pyttsx3
 from vosk import Model, KaldiRecognizer
+from PIL import Image, ImageDraw, ImageFilter, ImageTk
 
 # ==========================================
 # LOCAL WINDOWS VOICE ASSISTANT
@@ -81,6 +83,7 @@ WEBSITES = {
     "portfolio": "https://clydelimbaga.netlify.app",
     "canva": "https://www.canva.com",
     "claude": "https://claude.ai",
+    "reels": "https://www.facebook.com/reel/",
 }
 
 APPS = [
@@ -129,6 +132,8 @@ ALIASES = {
     "friend": "claude",
     "workplace": "vs code",
     "v s code": "vs code",
+    "facebook reels": "reels",
+    "reel": "reels",
 }
 
 EXIT_PHRASES = [
@@ -136,6 +141,15 @@ EXIT_PHRASES = [
     "exit assistant",
     "quit assistant",
     "goodbye",
+]
+
+# Scroll the window under the mouse cursor (works on Facebook feed, Reels, etc.).
+SCROLL_COMMANDS = [
+    "scroll",
+    "scroll down",
+    "scroll up",
+    "page down",
+    "page up",
 ]
 
 OPEN_VERBS = ("open", "launch", "start", "go to")
@@ -242,6 +256,28 @@ def open_app(app_name):
     speak(f"I don't know how to open {app_name} yet")
 
 
+def scroll_window(command):
+    """Scroll the window under the mouse cursor using synthetic wheel events.
+
+    Uses only ctypes so no extra dependency is needed. Scrolling happens at the
+    pointer location, so it works on whatever the user is looking at (e.g. the
+    Facebook feed or Reels) without the assistant needing window focus.
+    """
+    mouseeventf_wheel = 0x0800
+    wheel_delta = 120
+    notches = -4  # negative wheel delta scrolls the content down
+
+    if "up" in command:
+        notches = -notches
+
+    try:
+        ctypes.windll.user32.mouse_event(
+            mouseeventf_wheel, 0, 0, wheel_delta * notches, 0
+        )
+    except Exception as error:
+        print("Scroll error:", error)
+
+
 def normalize_command(command):
     command = command.lower().strip()
 
@@ -290,6 +326,7 @@ def build_grammar():
     recognition dramatically more accurate than open-vocabulary listening.
     """
     phrases = set(EXIT_PHRASES)
+    phrases.update(SCROLL_COMMANDS)
     phrases.update(["search for", "search google for"])
     for verb in OPEN_VERBS:
         for target in list(WEBSITES.keys()) + APPS + list(ALIASES.keys()):
@@ -338,6 +375,11 @@ def handle_command(command, pcm=b""):
         speak("Goodbye")
         return False
 
+    scroll = match_command(command, SCROLL_COMMANDS, 82)
+    if scroll:
+        scroll_window(scroll)
+        return True
+
     cleaned = strip_open_prefix(command)
     target = resolve_target(cleaned)
 
@@ -352,6 +394,11 @@ def handle_command(command, pcm=b""):
             if match_command(constrained, EXIT_PHRASES, 85):
                 speak("Goodbye")
                 return False
+
+            scroll = match_command(constrained, SCROLL_COMMANDS, 82)
+            if scroll:
+                scroll_window(scroll)
+                return True
 
             target = resolve_target(strip_open_prefix(constrained))
 
@@ -382,6 +429,74 @@ def handle_command(command, pcm=b""):
 
 
 
+def render_orb_image(size, core_rgb):
+    """Render a glossy anti-aliased orb sprite (RGBA) with a soft glow.
+
+    Drawn at 2x and downscaled each frame, which is what gives the smooth
+    web-style look that the old stippled tkinter ovals lacked.
+    """
+    res = size * 2
+    center = res / 2
+    radius = res * 0.30
+
+    orb = Image.new("RGBA", (res, res), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(orb)
+
+    # Radial shading: brighter toward the center, soft falloff only at the rim.
+    steps = 240
+    for i in range(steps):
+        d = 1.0 - i / steps  # 1.0 at rim (drawn first) down to 0.0 at center
+        r = radius * d
+        if d < 0.72:
+            alpha = 255
+        else:
+            alpha = int(255 * max(0.0, 1.0 - (d - 0.72) / 0.28))
+        shade = 0.45 + 0.55 * (1.0 - d)
+        color = tuple(int(c * shade) for c in core_rgb)
+        draw.ellipse(
+            [center - r, center - r, center + r, center + r],
+            fill=color + (alpha,),
+        )
+
+    # Fresnel-style edge highlight, the key to the glassy look.
+    rim = Image.new("RGBA", (res, res), (0, 0, 0, 0))
+    ImageDraw.Draw(rim).ellipse(
+        [
+            center - radius * 0.96,
+            center - radius * 0.96,
+            center + radius * 0.96,
+            center + radius * 0.96,
+        ],
+        outline=(255, 255, 255, 150),
+        width=max(2, int(res * 0.01)),
+    )
+    rim = rim.filter(ImageFilter.GaussianBlur(res * 0.02))
+    orb = Image.alpha_composite(orb, rim)
+
+    # Glossy specular highlight toward the top-left.
+    highlight = Image.new("RGBA", (res, res), (0, 0, 0, 0))
+    ImageDraw.Draw(highlight).ellipse(
+        [
+            center - radius * 0.60,
+            center - radius * 0.74,
+            center + radius * 0.10,
+            center - radius * 0.06,
+        ],
+        fill=(255, 255, 255, 130),
+    )
+    highlight = highlight.filter(ImageFilter.GaussianBlur(res * 0.018))
+    orb = Image.alpha_composite(orb, highlight)
+
+    # Outer glow beneath the orb.
+    glow = orb.filter(ImageFilter.GaussianBlur(res * 0.045))
+    glow.putalpha(glow.getchannel("A").point(lambda a: int(a * 0.6)))
+
+    base = Image.new("RGBA", (res, res), (0, 0, 0, 0))
+    base = Image.alpha_composite(base, glow)
+    base = Image.alpha_composite(base, orb)
+    return base
+
+
 class Orb:
     """A small always-on-top circular overlay that reflects the listening state.
 
@@ -390,11 +505,11 @@ class Orb:
     Keeping pyttsx3 on a single thread avoids Windows COM threading problems.
     """
 
-    SIZE = 150
-    TRANSPARENT = "#010203"
-    COLORS = {
-        "listening": {"core": "#00d4ff", "glow": "#0a6f8f"},
-        "speaking": {"core": "#7cfc00", "glow": "#2e7d32"},
+    SIZE = 170
+    TRANSPARENT = "#000000"
+    ORB_COLORS = {
+        "listening": (0, 200, 255),
+        "speaking": (120, 255, 110),
     }
 
     def __init__(self):
@@ -430,9 +545,14 @@ class Orb:
         )
         self.canvas.pack()
 
-        self.outer = self.canvas.create_oval(0, 0, 0, 0, outline="")
-        self.mid = self.canvas.create_oval(0, 0, 0, 0, outline="")
-        self.core = self.canvas.create_oval(0, 0, 0, 0, outline="")
+        self.image_item = self.canvas.create_image(
+            self.SIZE / 2, self.SIZE / 2, anchor="center"
+        )
+        self.photo = None
+        self.sprites = {
+            state: render_orb_image(self.SIZE, color)
+            for state, color in self.ORB_COLORS.items()
+        }
 
         self.menu = tk.Menu(self.window, tearoff=0)
         self.menu.add_command(label="Quit", command=self.quit)
@@ -442,40 +562,21 @@ class Orb:
         self.canvas.bind("<Button-3>", self._popup)
 
     def set_state(self, state):
-        if state in self.COLORS:
+        if state in self.ORB_COLORS:
             self.state = state
 
-    def _circle(self, item, radius):
-        center = self.SIZE / 2
-        self.canvas.coords(
-            item,
-            center - radius,
-            center - radius,
-            center + radius,
-            center + radius,
-        )
-
     def _draw(self):
-        colors = self.COLORS[self.state]
         self.phase += 0.35 if self.state == "speaking" else 0.16
         pulse = (math.sin(self.phase) + 1) / 2
+        target = max(1, int(self.SIZE * (1.0 + pulse * 0.06)))
 
-        if self.state == "speaking":
-            core_r = 32 + pulse * 6
-            mid_r = 46 + pulse * 9
-            outer_r = 60 + pulse * 12
-        else:
-            core_r = 30 + pulse * 2
-            mid_r = 42 + pulse * 4
-            outer_r = 54 + pulse * 7
+        frame = self.sprites[self.state].resize((target, target), Image.LANCZOS)
+        canvas_image = Image.new("RGBA", (self.SIZE, self.SIZE), (0, 0, 0, 0))
+        offset = (self.SIZE - target) // 2
+        canvas_image.paste(frame, (offset, offset), frame)
 
-        self._circle(self.outer, outer_r)
-        self._circle(self.mid, mid_r)
-        self._circle(self.core, core_r)
-
-        self.canvas.itemconfig(self.outer, fill=colors["glow"], stipple="gray12")
-        self.canvas.itemconfig(self.mid, fill=colors["glow"], stipple="gray50")
-        self.canvas.itemconfig(self.core, fill=colors["core"])
+        self.photo = ImageTk.PhotoImage(canvas_image)
+        self.canvas.itemconfig(self.image_item, image=self.photo)
 
         if not self.closed:
             self.window.after(40, self._draw)
