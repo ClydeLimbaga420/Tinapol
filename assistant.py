@@ -176,13 +176,40 @@ def handle_command(command):
         "browser",
     ]
 
-    targets = list(websites.keys()) + apps
+    # Common misrecognitions and shorthand mapped to a canonical target.
+    aliases = {
+        "yt": "youtube",
+        "you tube": "youtube",
+        "mail": "gmail",
+        "g mail": "gmail",
+        "chat gpt": "chatgpt",
+        "gpt": "chatgpt",
+        "stack overflow": "stackoverflow",
+        "note pad": "notepad",
+        "notice pad": "notepad",
+        "note book": "notepad",
+        "calculater": "calculator",
+        "kalk": "calculator",
+        "ms paint": "paint",
+        "file manager": "file explorer",
+        "my computer": "file explorer",
+        "terminal": "command prompt",
+        "console": "command prompt",
+        "taskmanager": "task manager",
+        "taskmgr": "task manager",
+        "get help": "github",
+    }
+
+    targets = list(websites.keys()) + apps + list(aliases.keys())
 
     # Try exact matching first, then fuzzy matching.
     target = cleaned if cleaned in targets else None
 
     if target is None:
         target = match_command(cleaned, targets, 78)
+
+    if target in aliases:
+        target = aliases[target]
 
     if target:
         if target in websites:
