@@ -16,6 +16,8 @@ The project uses offline speech recognition and local text-to-speech. No cloud A
 - Misrecognition aliases for words the assistant commonly hears wrong
 - Launch supported Windows applications
 - Open websites using voice commands
+- Open Facebook Reels by voice
+- Scroll the window under the pointer with voice commands
 - Search Google using spoken queries
 - Automatic startup when you log in to Windows
 - Simple Windows batch launcher (runs without a console window)
@@ -165,7 +167,7 @@ You can also **right-click the orb → Quit**. Because the overlay runs its own 
 
 ## Automatic Startup on Windows
 
-You can configure Clyde Voice Assistant to start automatically when you sign in to Windows.
+You can configure the assistant to start automatically when you sign in to Windows.
 
 ### 1. Check the Startup Launcher
 
@@ -221,7 +223,7 @@ Keep the original batch file inside the project folder. Only the shortcut needs 
 
 Sign out and sign back in, or restart the computer.
 
-After logging in, Windows should launch the shortcut and start Clyde Voice Assistant.
+After logging in, Windows should launch the shortcut and start the assistant.
 
 > **Important:** This starts the assistant when you sign in, not before the Windows login screen. The project folder, Python environment, and speech model must remain accessible.
 
@@ -231,7 +233,7 @@ To prevent the assistant from starting automatically:
 
 1. Press `Win + R`.
 2. Enter `shell:startup`.
-3. Delete the Clyde Voice Assistant shortcut.
+3. Delete the assistant shortcut.
 
 This does not delete your project or its dependencies.
 
@@ -343,7 +345,7 @@ APPS = [
 
 If you skip step 2, the command will never reach `open_app()`.
 
-Apps installed to user-specific locations (Chrome, Brave, Spotify) are handled specially in `open_app()` with a list of candidate paths plus a fallback, rather than being added to the `apps` dictionary.
+Apps installed to user-specific locations (Chrome, Brave, Spotify, VS Code) are handled specially in `open_app()` with a list of candidate paths plus a fallback, rather than being added to the `apps` dictionary.
 
 ## Fixing Misrecognitions with Aliases
 
@@ -368,7 +370,7 @@ Alias values must be a canonical key that already exists in `WEBSITES` or `APPS`
 The assistant uses two passes: an open-vocabulary pass, then a grammar-constrained pass that only considers the known commands. If it still mishears you:
 
 1. **Add aliases.** Run `python assistant.py`, watch the `You said:` and `(constrained: ...)` lines, then add each mishearing to `ALIASES`.
-2. **Install a larger Vosk model.** Accuracy increases significantly with model size. Unzip any model into the `model/` folder; the assistant automatically picks the largest one it recognizes. Suggested order:
+2. **Install a larger Vosk model.** Accuracy increases significantly with model size. Unzip any model into the `model/` folder; the assistant detects it automatically on the next launch. Suggested order:
    - `vosk-model-small-en-us-0.22` (~40 MB) — quick upgrade
    - `vosk-model-en-us-0.22` (~1.8 GB) — most accurate
 3. **Select the correct microphone.** If the wrong device is used, the console prints the available input indices on startup failure. Set `MIC_DEVICE` near the top of `assistant.py` to your microphone's index:

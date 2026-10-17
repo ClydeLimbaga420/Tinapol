@@ -33,7 +33,7 @@ python assistant.py
 - Adding a website only needs the module-level `WEBSITES` dict (assistant.py:74); add shorthand/misrecognitions to `ALIASES` (assistant.py:110). Alias values must be a canonical key already in `WEBSITES` or `APPS`. The command grammar is rebuilt from all of these automatically at startup.
 - Fuzzy-match thresholds are tuned per call site: `75` default, `78` for targets (`resolve_target`, assistant.py:312), `82` for scroll commands, `85` for exit phrases. Changing them globally affects misrecognition vs. false-positive tradeoffs — change deliberately.
 - **Keep audio + TTS on the tkinter main thread.** The mic callback only enqueues bytes; `Orb._poll` drains them from the event loop via `window.after`. Do not move `speak`/`pyttsx3` or `AcceptWaveform` into a worker thread — Windows COM breaks.
-- Apps with user-specific install paths (Chrome, Brave, Spotify) are special-cased in `open_app()` with a candidate-path loop plus a URI/default-browser fallback, not added to the `apps` dict.
+- Apps with user-specific install paths (Chrome, Brave, Spotify, VS Code) are special-cased in `open_app()` with a candidate-path loop plus a URI/default-browser fallback, not added to the `apps` dict.
 - Command text is normalized (lowercased, filler words/punctuation stripped, `open|launch|start|go to` prefix removed) before matching; match against normalized forms.
 - Set `MIC_DEVICE` (assistant.py:42) to a sounddevice index to force a specific microphone; on stream failure the available inputs are printed to the console.
 - Never execute arbitrary recognized text as a shell command — only launch entries from the allowlisted dicts/lists.
