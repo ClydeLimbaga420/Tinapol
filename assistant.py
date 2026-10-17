@@ -158,6 +158,7 @@ def handle_command(command):
         "chatgpt": "https://chatgpt.com",
         "reddit": "https://www.reddit.com",
         "stackoverflow": "https://stackoverflow.com",
+        "portfolio": "https://clydelimbaga.netlify.app",
     }
 
     apps = [
