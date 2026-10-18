@@ -214,7 +214,10 @@ CLOSE_TAB_COMMANDS = [
     "close tab",
     "close this tab",
     "close the tab",
+    "close current tab",
+    "close active tab",
     "close browser tab",
+    "close that tab",
 ]
 
 CLOSE_WINDOW_COMMANDS = [
@@ -223,6 +226,7 @@ CLOSE_WINDOW_COMMANDS = [
     "close the window",
     "close app",
     "close program",
+    "close that window",
 ]
 
 CLOSE_BLOCKED = {
@@ -405,7 +409,9 @@ VK_CONTROL = 0x11
 VK_MENU = 0x12
 VK_W = 0x57
 VK_F4 = 0x73
+VK_TAB = 0x09
 KEYEVENTF_KEYUP = 0x0002
+WM_CLOSE = 0x0010
 
 
 def send_key_chord(vk_codes):
@@ -420,17 +426,88 @@ def send_key_chord(vk_codes):
         ctypes.windll.user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
 
 
-def close_focused(command):
-    """Close the active tab (Ctrl+W) or the active window (Alt+F4).
+def close_browser_tab_by_name(name):
+    """Find a browser window whose title matches the site name and close its tab."""
+    name = (name or "").lower()
+    browser_classes = ("Chrome_WidgetWin_1", "MozillaWindowClass", "YandexBrowser_WidgetWin_1", "msedge")
 
-    Keystrokes go to whatever window currently has focus, so the user should
-    focus the tab or window they mean to close before speaking. A bare "close"
-    closes the tab, which is the less destructive of the two.
-    """
-    is_window = any(word in command for word in ("window", "app", "program"))
+    user32 = ctypes.windll.user32
+    found_hwnd = None
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def enum(hwnd, _):
+        nonlocal found_hwnd
+        if found_hwnd:
+            return True
+        if not user32.IsWindowVisible(hwnd):
+            return True
+        cname = ctypes.create_unicode_buffer(256)
+        user32.GetClassNameW(hwnd, cname, 256)
+        if cname.value not in browser_classes:
+            return True
+        tbuf = ctypes.create_unicode_buffer(512)
+        user32.GetWindowTextW(hwnd, tbuf, 512)
+        title = tbuf.value.lower()
+        if not title:
+            return True
+        if name in title or any(k in title for k in (name,)):
+            found_hwnd = hwnd
+            return False
+        return True
 
     try:
-        if is_window:
+        user32.EnumWindows(enum, 0)
+    except Exception:
+        found_hwnd = None
+
+    if not found_hwnd:
+        return False
+
+    hwnd = found_hwnd
+    try:
+        if user32.IsIconic(hwnd):
+            user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+        user32.SetForegroundWindow(hwnd)
+        ctypes.windll.kernel32.Sleep(100)
+    except Exception:
+        pass
+
+    try:
+        send_key_chord((VK_CONTROL, VK_W))
+        return True
+    except Exception as error:
+        print("Close tab by name error:", error)
+        return False
+
+
+def close_focused(command):
+    """Close the active tab (Ctrl+W) or the active window (Alt+F4)."""
+    is_window = any(
+        word in command
+        for word in (
+            "window",
+            "app",
+            "program",
+            "entire window",
+            "the window",
+            "this window",
+            "that window",
+        )
+    )
+    is_tab = any(
+        word in command
+        for word in (
+            "tab",
+            "browser tab",
+            "current tab",
+            "active tab",
+            "this tab",
+            "that tab",
+        )
+    )
+
+    try:
+        if is_window and not is_tab:
             send_key_chord((VK_MENU, VK_F4))
         else:
             send_key_chord((VK_CONTROL, VK_W))
@@ -439,7 +516,7 @@ def close_focused(command):
         speak("I could not close that")
         return
 
-    speak("Closing the window" if is_window else "Closing the tab")
+    speak("Closing the window" if (is_window and not is_tab) else "Closing the tab")
 
 
 def close_explorer_windows():
@@ -463,9 +540,8 @@ def close_explorer_windows():
 
     user32.EnumWindows(collect, 0)
 
-    wm_close = 0x0010
     for hwnd in folder_windows:
-        user32.PostMessageW(hwnd, wm_close, 0, 0)
+        user32.PostMessageW(hwnd, WM_CLOSE, 0, 0)
 
     return len(folder_windows)
 
@@ -572,6 +648,11 @@ def resolve_close_app(command):
     if name in CLOSE_BLOCKED:
         return None
 
+    # If user says "close tab", "close browser tab" etc - don't treat as app name
+    tab_words = ("tab", "browser tab", "current tab", "active tab", "this tab", "that tab")
+    if any(w in name for w in tab_words):
+        return None
+
     if name in ALIASES:
         name = ALIASES[name]
 
@@ -591,6 +672,14 @@ def build_grammar():
     phrases.update(SCROLL_COMMANDS)
     phrases.update(CLOSE_TAB_COMMANDS)
     phrases.update(CLOSE_WINDOW_COMMANDS)
+    phrases.add("close tab")
+    phrases.add("close tabs")
+    phrases.add("close browser tab")
+    phrases.add("close browser tabs")
+    # allow closing specific tabs by target name
+    for target in list(WEBSITES.keys()) + APPS:
+        phrases.add(f"close tab {target}")
+        phrases.add(f"close browser tab {target}")
     for target in CLOSE_APP_TARGETS:
         phrases.add(f"close {target}")
     for alias, canonical in ALIASES.items():
@@ -654,6 +743,34 @@ def handle_command(command, pcm=b""):
         close_app(close_target)
         return True
 
+    # Close specific browser tab by name/site (broader patterns)
+    m = re.match(r"^close\s+(?:the\s+|this\s+|that\s+|a\s+)?(?:browser\s+)?tab(?:s)?\s+(?:for\s+|on\s+|in\s+|of\s+)?(.+)$", command)
+    if not m:
+        m = re.match(r"^close\s+(.+)\s+tab(?:s)?$", command)
+    if m:
+        site = m.group(1).strip()
+        # skip generic words
+        if site in ("current", "active", "this", "that", "the", "browser"):
+            pass  # fall through to generic
+        else:
+            cleaned_site = strip_open_prefix(site)
+            t = resolve_target(cleaned_site)
+            if not t and cleaned_site:
+                candidates = list(WEBSITES.keys()) + APPS + ["youtube", "facebook", "google", "gmail", "reddit", "chatgpt", "github", "stackoverflow"]
+                t = match_command(cleaned_site, candidates, 75)
+            if not t:
+                t = cleaned_site
+            if close_browser_tab_by_name(t):
+                speak(f"Closing {t} tab")
+                return True
+            speak(f"Couldn't find {t} tab")
+            return True
+
+    # Check for "close tab" or "close browser tab" specifically (current)
+    if re.search(r"^close\s+(?:browser\s+)?tab(?:s)?$", command) or command in ("close tab", "close the tab", "close current tab", "close active tab"):
+        close_focused("close tab")
+        return True
+
     close_cmd = match_command(
         command, CLOSE_TAB_COMMANDS + CLOSE_WINDOW_COMMANDS, 82
     )
@@ -684,6 +801,29 @@ def handle_command(command, pcm=b""):
             close_target = resolve_close_app(constrained)
             if close_target:
                 close_app(close_target)
+                return True
+
+            m = re.match(r"^close\s+(?:the\s+|this\s+|that\s+|a\s+)?(?:browser\s+)?tab(?:s)?\s+(?:for\s+|on\s+|in\s+|of\s+)?(.+)$", constrained)
+            if not m:
+                m = re.match(r"^close\s+(.+)\s+tab(?:s)?$", constrained)
+            if m:
+                site = m.group(1).strip()
+                if site not in ("current", "active", "this", "that", "the", "browser"):
+                    cleaned_site = strip_open_prefix(site)
+                    t = resolve_target(cleaned_site)
+                    if not t and cleaned_site:
+                        candidates = list(WEBSITES.keys())
+                        t = match_command(cleaned_site, candidates, 75)
+                    if not t:
+                        t = cleaned_site
+                    if close_browser_tab_by_name(t):
+                        speak(f"Closing {t} tab")
+                        return True
+                    speak(f"Couldn't find {t} tab")
+                    return True
+
+            if re.search(r"^close\s+(?:browser\s+)?tab(?:s)?$", constrained) or constrained in ("close tab", "close the tab", "close current tab", "close active tab"):
+                close_focused("close tab")
                 return True
 
             close_cmd = match_command(
