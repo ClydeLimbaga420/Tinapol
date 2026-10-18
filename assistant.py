@@ -971,6 +971,7 @@ class Orb:
         self.stream = None
         self.closed = False
         self._drag_offset = (0, 0)
+        self._dragging = False
         self._buffer = []
 
         self.window = tk.Tk()
@@ -1012,6 +1013,7 @@ class Orb:
 
         self.canvas.bind("<ButtonPress-1>", self._start_drag)
         self.canvas.bind("<B1-Motion>", self._drag)
+        self.canvas.bind("<ButtonRelease-1>", self._end_drag)
         self.canvas.bind("<Button-3>", self._popup)
 
     def set_state(self, state):
@@ -1035,12 +1037,21 @@ class Orb:
             self.window.after(40, self._draw)
 
     def _start_drag(self, event):
-        self._drag_offset = (event.x, event.y)
+        self._dragging = True
+        self._drag_offset = (
+            event.x_root - self.window.winfo_x(),
+            event.y_root - self.window.winfo_y(),
+        )
 
     def _drag(self, event):
-        x = self.window.winfo_x() + event.x - self._drag_offset[0]
-        y = self.window.winfo_y() + event.y - self._drag_offset[1]
+        if not self._dragging:
+            return
+        x = event.x_root - self._drag_offset[0]
+        y = event.y_root - self._drag_offset[1]
         self.window.geometry(f"+{x}+{y}")
+
+    def _end_drag(self, _event):
+        self._dragging = False
 
     def _popup(self, event):
         try:
