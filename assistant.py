@@ -685,7 +685,7 @@ def build_grammar():
     for alias, canonical in ALIASES.items():
         if canonical in CLOSE_APP_TARGETS:
             phrases.add(f"close {alias}")
-    phrases.update(["search for", "search google for"])
+    phrases.update(["search for", "search google for", "play", "play song", "play music"])
     for verb in OPEN_VERBS:
         for target in list(WEBSITES.keys()) + APPS + list(ALIASES.keys()):
             phrases.add(f"{verb} {target}")
@@ -843,19 +843,39 @@ def handle_command(command, pcm=b""):
             open_app(target)
         return True
 
-    # Search Google when the user explicitly requests a search.
-    for phrase in ("search for ", "search google for ", "google "):
+    # Play song on YouTube
+    for phrase in ("play ", "play song ", "play the song ", "play music ", "play a song "):
         if command.startswith(phrase):
             query = command[len(phrase):].strip()
-
             if query:
-                url = (
-                    "https://www.google.com/search?q="
-                    + urllib.parse.quote_plus(query)
-                )
+                url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)
                 webbrowser.open(url)
-                speak(f"Searching for {query}")
+                speak(f"Playing {query} on YouTube")
             return True
+
+            # Play song on YouTube
+            for phrase in ("play ", "play song ", "play the song ", "play music ", "play a song "):
+                if constrained.startswith(phrase):
+                    query = constrained[len(phrase):].strip()
+                    if query:
+                        url = "https://www.youtube.com/results?search_query=" + urllib.parse.quote_plus(query)
+                        webbrowser.open(url)
+                        speak(f"Playing {query} on YouTube")
+                    return True
+
+            # Search Google when the user explicitly requests a search.
+            for phrase in ("search for ", "search google for ", "google "):
+                if constrained.startswith(phrase):
+                    query = constrained[len(phrase):].strip()
+
+                    if query:
+                        url = (
+                            "https://www.google.com/search?q="
+                            + urllib.parse.quote_plus(query)
+                        )
+                        webbrowser.open(url)
+                        speak(f"Searching for {query}")
+                    return True
 
     speak("Sorry, I didn't understand. Please try again.")
     return True
