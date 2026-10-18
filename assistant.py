@@ -85,6 +85,7 @@ WEBSITES = {
     "claude": "https://claude.ai",
     "reels": "https://www.facebook.com/reel/",
     "enma": "https://www.enma.lol/home",
+    "netacad": "https://www.netacad.com/portal/dashboard",
 }
 
 APPS = [
@@ -136,7 +137,12 @@ ALIASES = {
     "facebook reels": "reels",
     "reel": "reels",
     "watch": "enma",
-    
+    "net acad": "netacad",
+    "net academy": "netacad",
+    "netacadcom": "netacad",
+    "cisco": "netacad",
+    "skills for all": "netacad",
+    "skillsforall": "netacad",
 }
 
 EXIT_PHRASES = [
