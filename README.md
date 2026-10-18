@@ -15,9 +15,12 @@ The project uses offline speech recognition and local text-to-speech. No cloud A
 - Fuzzy command matching using RapidFuzz
 - Misrecognition aliases for words the assistant commonly hears wrong
 - Launch supported Windows applications
+- Open and close Microsoft Office apps by name (Word, Excel, PowerPoint, Outlook, OneNote, Access, Publisher)
 - Open websites using voice commands
 - Open Facebook Reels by voice
 - Scroll the window under the pointer with voice commands
+- Close the focused browser tab or window with voice commands
+- Close a specific app by name (e.g. "Close Chrome"), no matter which window has focus
 - Search Google using spoken queries
 - Automatic startup when you log in to Windows
 - Simple Windows batch launcher (runs without a console window)
@@ -254,6 +257,13 @@ This does not delete your project or its dependencies.
 | Open Brave | Launch Brave if found |
 | Open Spotify | Launch Spotify |
 | Open VS Code | Launch Visual Studio Code if found |
+| Open Word | Launch Microsoft Word |
+| Open Excel | Launch Microsoft Excel |
+| Open PowerPoint | Launch Microsoft PowerPoint |
+| Open Outlook | Launch Microsoft Outlook |
+| Open OneNote | Launch Microsoft OneNote |
+| Open Access | Launch Microsoft Access |
+| Open Publisher | Launch Microsoft Publisher |
 | Open Browser | Open the default browser |
 
 ### Websites
@@ -283,6 +293,53 @@ These commands scroll whatever window is **under the mouse cursor**, so keep the
 | Scroll up | Scroll up |
 | Page down | Scroll down one page |
 | Page up | Scroll up one page |
+
+### Closing Tabs, Windows, and Apps
+
+#### The focused tab or window
+
+These commands affect the window that currently has **focus** (keyboard focus), so click the tab or window you want to close first:
+
+| Voice Command | Action |
+|---|---|
+| Close / Close tab | Close the active tab (Ctrl+W) |
+| Close this tab | Close the active tab (Ctrl+W) |
+| Close window | Close the active window (Alt+F4) |
+| Close this window | Close the active window (Alt+F4) |
+| Close app / Close program | Close the active window (Alt+F4) |
+
+A bare **Close** closes the tab, which is the less destructive option. In browsers, `Ctrl+Shift+T` reopens a tab that was closed by mistake.
+
+#### A specific app by name
+
+Naming the app closes **every window of that app** wherever it is on the desktop — it does not need focus:
+
+| Voice Command | Action |
+|---|---|
+| Close Notepad | Force-close all Notepad windows |
+| Close Calculator / Close Calc | Force-close the Calculator |
+| Close Paint | Force-close Paint |
+| Close Command Prompt / Close CMD | Force-close all Command Prompt windows |
+| Close Task Manager | Force-close Task Manager |
+| Close Chrome / Close Google Chrome | Force-close all Chrome windows |
+| Close Brave / Close Brave Browser | Force-close all Brave windows |
+| Close Spotify | Force-close Spotify |
+| Close VS Code | Force-close Visual Studio Code |
+| Close Word | Force-close all Microsoft Word windows |
+| Close Excel | Force-close all Microsoft Excel windows |
+| Close PowerPoint | Force-close all Microsoft PowerPoint windows |
+| Close Outlook | Force-close Microsoft Outlook |
+| Close OneNote | Force-close Microsoft OneNote |
+| Close Access | Force-close Microsoft Access |
+| Close Publisher | Force-close Microsoft Publisher |
+| Close File Explorer | Close the open folder windows |
+
+Notes:
+
+- Supported apps are listed in `CLOSEABLE_APPS` in `assistant.py`; aliases from `ALIASES` work too (e.g. "Close note pad").
+- Named apps are force-closed with `taskkill`, so **unsaved work in that app may be lost**.
+- File Explorer is closed gently with window messages instead, because killing `explorer.exe` would also shut down the taskbar and desktop.
+- The assistant always reports what happened: it confirms the close, says the app is not running, or says it does not know that app.
 
 ### Google Search
 
@@ -348,6 +405,18 @@ If you skip step 2, the command will never reach `open_app()`.
 
 Apps installed to user-specific locations (Chrome, Brave, Spotify, VS Code) are handled specially in `open_app()` with a list of candidate paths plus a fallback, rather than being added to the `apps` dictionary.
 
+Microsoft Office apps (Word, Excel, PowerPoint, Outlook, OneNote, Access, Publisher) are handled by the `office` dictionary inside `open_app()`: the executable is looked up in the Windows `App Paths` registry, so no install path is hardcoded. If Office is not installed, the assistant says the app is not installed.
+
+To also allow **"close \<app\>" by name**, add a third entry to the module-level `CLOSEABLE_APPS` dictionary, mapping the app name to the executable name(s) to pass to `taskkill`:
+
+```python
+CLOSEABLE_APPS = {
+    "my app": ["MyApp.exe"],
+}
+```
+
+Skip this entry if the app should only be openable, not closable by voice.
+
 ## Fixing Misrecognitions with Aliases
 
 When the assistant consistently hears a word wrong, add it to the module-level `ALIASES` dictionary — it maps the misheard word to a command that already exists. Aliases can also be friendly nicknames, for example mapping "friend" to Claude and "workplace" to VS Code:
@@ -359,6 +428,8 @@ ALIASES = {
     "can ba": "canva",
     "friend": "claude",
     "workplace": "vs code",
+    "power point": "powerpoint",
+    "microsoft word": "word",
 }
 ```
 
@@ -392,8 +463,8 @@ MIC_DEVICE = 1  # or None to use the system default
 | Pillow | Renders the glossy, anti-aliased orb sprite |
 | tkinter | Draws the floating orb overlay and runs the event loop |
 | webbrowser | Opens websites and search results |
-| subprocess | Launches approved desktop applications |
-| ctypes | Sends synthetic mouse-wheel events for scrolling |
+| subprocess | Launches approved desktop applications and force-closes allowlisted apps by name (`taskkill`) |
+| ctypes | Sends synthetic mouse-wheel events (scrolling), keystrokes (close tab/window), and window messages (close File Explorer) |
 | Windows Startup | Launches the assistant after user sign-in |
 
 ## Offline Support

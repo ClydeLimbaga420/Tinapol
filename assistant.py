@@ -10,6 +10,7 @@ import sys
 import tkinter as tk
 import urllib.parse
 import webbrowser
+import winreg
 from pathlib import Path
 from rapidfuzz import process, fuzz
 
@@ -106,7 +107,42 @@ APPS = [
     "spotify",
     "vs code",
     "vscode",
+    "word",
+    "excel",
+    "powerpoint",
+    "outlook",
+    "onenote",
+    "access",
+    "publisher",
 ]
+
+CLOSEABLE_APPS = {
+    "notepad": ["notepad.exe"],
+    "calculator": ["CalculatorApp.exe", "calc.exe"],
+    "calc": ["CalculatorApp.exe", "calc.exe"],
+    "paint": ["mspaint.exe"],
+    "command prompt": ["cmd.exe"],
+    "cmd": ["cmd.exe"],
+    "task manager": ["taskmgr.exe"],
+    "chrome": ["chrome.exe"],
+    "google chrome": ["chrome.exe"],
+    "brave": ["brave.exe"],
+    "brave browser": ["brave.exe"],
+    "spotify": ["Spotify.exe"],
+    "vs code": ["Code.exe"],
+    "vscode": ["Code.exe"],
+    "word": ["winword.exe"],
+    "excel": ["excel.exe"],
+    "powerpoint": ["powerpnt.exe"],
+    "outlook": ["outlook.exe"],
+    "onenote": ["onenote.exe"],
+    "access": ["msaccess.exe"],
+    "publisher": ["mspub.exe"],
+}
+
+EXPLORER_NAMES = ("file explorer", "explorer")
+
+CLOSE_APP_TARGETS = list(CLOSEABLE_APPS) + list(EXPLORER_NAMES)
 
 # Common misrecognitions and shorthand mapped to a canonical target.
 ALIASES = {
@@ -143,6 +179,17 @@ ALIASES = {
     "cisco": "netacad",
     "skills for all": "netacad",
     "skillsforall": "netacad",
+    "microsoft word": "word",
+    "ms word": "word",
+    "microsoft excel": "excel",
+    "ms excel": "excel",
+    "power point": "powerpoint",
+    "ms powerpoint": "powerpoint",
+    "microsoft powerpoint": "powerpoint",
+    "one note": "onenote",
+    "microsoft outlook": "outlook",
+    "microsoft access": "access",
+    "microsoft publisher": "publisher",
 }
 
 EXIT_PHRASES = [
@@ -160,6 +207,36 @@ SCROLL_COMMANDS = [
     "page down",
     "page up",
 ]
+
+# Close the focused tab (Ctrl+W) or the focused window (Alt+F4).
+CLOSE_TAB_COMMANDS = [
+    "close",
+    "close tab",
+    "close this tab",
+    "close the tab",
+    "close browser tab",
+]
+
+CLOSE_WINDOW_COMMANDS = [
+    "close window",
+    "close this window",
+    "close the window",
+    "close app",
+    "close program",
+]
+
+CLOSE_BLOCKED = {
+    "",
+    "tab",
+    "window",
+    "app",
+    "program",
+    "page",
+    "browser tab",
+    "current tab",
+    "current window",
+    "everything",
+}
 
 OPEN_VERBS = ("open", "launch", "start", "go to")
 
@@ -262,6 +339,43 @@ def open_app(app_name):
         webbrowser.open("https://vscode.dev")
         return
 
+    office = {
+        "word": "winword.exe",
+        "excel": "excel.exe",
+        "powerpoint": "powerpnt.exe",
+        "outlook": "outlook.exe",
+        "onenote": "onenote.exe",
+        "access": "msaccess.exe",
+        "publisher": "mspub.exe",
+    }
+
+    if app_name in office:
+        exe = office[app_name]
+        install_path = None
+
+        for root in (winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER):
+            try:
+                with winreg.OpenKey(
+                    root,
+                    rf"SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\{exe}",
+                ) as key:
+                    install_path = winreg.QueryValueEx(key, "")[0]
+                break
+            except OSError:
+                continue
+
+        if not install_path:
+            speak(f"{app_name} is not installed")
+            return
+
+        try:
+            subprocess.Popen([install_path.strip('"')])
+            speak(f"Opening {app_name}")
+        except OSError as error:
+            print(error)
+            speak(f"Could not open {app_name}")
+        return
+
     speak(f"I don't know how to open {app_name} yet")
 
 
@@ -285,6 +399,117 @@ def scroll_window(command):
         )
     except Exception as error:
         print("Scroll error:", error)
+
+
+VK_CONTROL = 0x11
+VK_MENU = 0x12
+VK_W = 0x57
+VK_F4 = 0x73
+KEYEVENTF_KEYUP = 0x0002
+
+
+def send_key_chord(vk_codes):
+    """Press and release a combination of virtual-key codes together.
+
+    Uses ctypes only, matching scroll_window(), so no extra dependency is
+    needed.
+    """
+    for vk in vk_codes:
+        ctypes.windll.user32.keybd_event(vk, 0, 0, 0)
+    for vk in reversed(vk_codes):
+        ctypes.windll.user32.keybd_event(vk, 0, KEYEVENTF_KEYUP, 0)
+
+
+def close_focused(command):
+    """Close the active tab (Ctrl+W) or the active window (Alt+F4).
+
+    Keystrokes go to whatever window currently has focus, so the user should
+    focus the tab or window they mean to close before speaking. A bare "close"
+    closes the tab, which is the less destructive of the two.
+    """
+    is_window = any(word in command for word in ("window", "app", "program"))
+
+    try:
+        if is_window:
+            send_key_chord((VK_MENU, VK_F4))
+        else:
+            send_key_chord((VK_CONTROL, VK_W))
+    except Exception as error:
+        print("Close error:", error)
+        speak("I could not close that")
+        return
+
+    speak("Closing the window" if is_window else "Closing the tab")
+
+
+def close_explorer_windows():
+    """Close File Explorer folder windows without killing the Windows shell.
+
+    The taskbar and desktop are also explorer.exe, so taskkill would take down
+    the whole shell. Each visible folder window is sent WM_CLOSE instead,
+    which needs no focus and leaves the shell running.
+    """
+    user32 = ctypes.windll.user32
+    folder_windows = []
+
+    @ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.c_void_p, ctypes.c_void_p)
+    def collect(hwnd, _lparam):
+        if user32.IsWindowVisible(hwnd):
+            class_name = ctypes.create_unicode_buffer(256)
+            user32.GetClassNameW(hwnd, class_name, 256)
+            if class_name.value in ("CabinetWClass", "ExploreWClass"):
+                folder_windows.append(hwnd)
+        return True
+
+    user32.EnumWindows(collect, 0)
+
+    wm_close = 0x0010
+    for hwnd in folder_windows:
+        user32.PostMessageW(hwnd, wm_close, 0, 0)
+
+    return len(folder_windows)
+
+
+def close_app(app_name):
+    """Close every window of a named app wherever it is, not just the focused one.
+
+    Only allowlisted executables from CLOSEABLE_APPS are ever passed to
+    taskkill; recognized text is never executed as a command.
+    """
+    if app_name in EXPLORER_NAMES:
+        closed = close_explorer_windows()
+        speak("Closing File Explorer" if closed else "File Explorer isn't open")
+        return True
+
+    exe_names = CLOSEABLE_APPS.get(app_name)
+    if not exe_names:
+        speak(f"I don't know how to close {app_name} yet")
+        return True
+
+    result = None
+    try:
+        for exe in exe_names:
+            result = subprocess.run(
+                ["taskkill", "/F", "/IM", exe],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0:
+                speak(f"Closing {app_name}")
+                return True
+    except Exception as error:
+        print("Close error:", error)
+        speak(f"I could not close {app_name}")
+        return True
+
+    stderr = (result.stderr or "") if result else ""
+    if "not found" in stderr.lower() or "no running" in stderr.lower():
+        speak(f"{app_name} isn't running")
+    else:
+        print("taskkill error:", stderr.strip())
+        speak(f"I could not close {app_name}")
+    return True
 
 
 def normalize_command(command):
@@ -328,6 +553,34 @@ def resolve_target(text):
     return target
 
 
+def resolve_close_app(command):
+    """Map "close <app>" to a canonical closable app name, or None.
+
+    Tab/window phrases (e.g. "close tab") fall through to the generic close
+    commands, so this only fires when the name resolves to a closable app.
+    """
+    match = re.match(r"^close\s+(.*)$", command)
+    if not match:
+        return None
+
+    name = re.sub(
+        r"^(?:(?:the|this|app|program)\s+)+",
+        "",
+        match.group(1),
+    ).strip()
+
+    if name in CLOSE_BLOCKED:
+        return None
+
+    if name in ALIASES:
+        name = ALIASES[name]
+
+    if name in CLOSE_APP_TARGETS:
+        return name
+
+    return match_command(name, CLOSE_APP_TARGETS, 78)
+
+
 def build_grammar():
     """Phrases the recognizer is allowed to consider for commands.
 
@@ -336,6 +589,13 @@ def build_grammar():
     """
     phrases = set(EXIT_PHRASES)
     phrases.update(SCROLL_COMMANDS)
+    phrases.update(CLOSE_TAB_COMMANDS)
+    phrases.update(CLOSE_WINDOW_COMMANDS)
+    for target in CLOSE_APP_TARGETS:
+        phrases.add(f"close {target}")
+    for alias, canonical in ALIASES.items():
+        if canonical in CLOSE_APP_TARGETS:
+            phrases.add(f"close {alias}")
     phrases.update(["search for", "search google for"])
     for verb in OPEN_VERBS:
         for target in list(WEBSITES.keys()) + APPS + list(ALIASES.keys()):
@@ -389,6 +649,18 @@ def handle_command(command, pcm=b""):
         scroll_window(scroll)
         return True
 
+    close_target = resolve_close_app(command)
+    if close_target:
+        close_app(close_target)
+        return True
+
+    close_cmd = match_command(
+        command, CLOSE_TAB_COMMANDS + CLOSE_WINDOW_COMMANDS, 82
+    )
+    if close_cmd:
+        close_focused(close_cmd)
+        return True
+
     cleaned = strip_open_prefix(command)
     target = resolve_target(cleaned)
 
@@ -407,6 +679,18 @@ def handle_command(command, pcm=b""):
             scroll = match_command(constrained, SCROLL_COMMANDS, 82)
             if scroll:
                 scroll_window(scroll)
+                return True
+
+            close_target = resolve_close_app(constrained)
+            if close_target:
+                close_app(close_target)
+                return True
+
+            close_cmd = match_command(
+                constrained, CLOSE_TAB_COMMANDS + CLOSE_WINDOW_COMMANDS, 82
+            )
+            if close_cmd:
+                close_focused(close_cmd)
                 return True
 
             target = resolve_target(strip_open_prefix(constrained))
